@@ -1,0 +1,6 @@
+.idea
+.venv
+.venv/yolov3.cfg
+.venv/yolov3.weights
+.venv/yolov3-tiny.cfg
+.venv/yolov3-tiny.weights
