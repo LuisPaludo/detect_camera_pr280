@@ -1,6 +1,7 @@
-.idea
-.venv
-.venv/yolov3.cfg
-.venv/yolov3.weights
-.venv/yolov3-tiny.cfg
-.venv/yolov3-tiny.weights
+/.idea/
+/.venv/
+yolov3.cfg
+yolov3.weights
+yolov3-tiny.cfg
+yolov3-tiny.weights
+.yolov3.*
