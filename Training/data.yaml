@@ -9,6 +9,6 @@ names: ['big_cone', 'go_sign', 'small_cone', 'stop_sign']
 roboflow:
   workspace: paludo
   project: camera_detection_pr280
-  version: 2
+  version: 3
   license: CC BY 4.0
-  url: https://universe.roboflow.com/paludo/camera_detection_pr280/dataset/2
+  url: https://universe.roboflow.com/paludo/camera_detection_pr280/dataset/3
