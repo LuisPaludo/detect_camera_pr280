@@ -5,13 +5,16 @@ from ultralytics import YOLO
 import cv2
 import logging
 
+from Classes.DetectClasses import DetectClasses
 from Classes.Position import Position
 
 
 class DetectStopSign:
     def __init__(self):
         # 'yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt'
-        self.model = YOLO('yolov8s.pt')
+
+        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/detect/train4/weights/best.pt')
+        self.model.export(format='onnx')
         self.url = "https://camera1.pr280.com.br/index.m3u8"
         self.cap = cv2.VideoCapture(self.url)
         self.frame_count = 0
@@ -19,7 +22,8 @@ class DetectStopSign:
         self.stop_sign_detected = False
         self.confidence = 0
         self.box = None
-        self.stop_sign_class = 11
+        self.detect_classes = DetectClasses()
+        self.detected_objects = []
         logging.getLogger("ultralytics").setLevel(logging.WARNING)
 
     def execute(self):
@@ -78,7 +82,12 @@ class DetectStopSign:
         except ValueError as e:
             print(f"Erro ao processar a data/hora: {e}")
 
-    def detect_stop_sign(self, region_of_interest):
+    def detect_objects(self, region_of_interest):
+        self.detected_objects = []
+        self.stop_sign_detected = False
+        self.confidence = 0
+        self.box = None
+
         results = self.model(region_of_interest)
 
         for r in results:
@@ -87,15 +96,25 @@ class DetectStopSign:
                 cls = int(b.cls[0])
                 conf = float(b.conf[0])
 
-                if cls == self.stop_sign_class and conf > 0.8:
-                    self.stop_sign_detected = True
-                    if conf > self.confidence:
-                        self.confidence = conf
-                        self.box = b.xyxy[0].cpu().numpy()
+                if conf > 0.75:
+                    class_name = self.model.names[cls]
+                    box = b.xyxy[0].cpu().numpy()
+
+                    self.detected_objects.append({
+                        'class': cls,
+                        'class_name': class_name,
+                        'confidence': conf,
+                        'box': box
+                    })
+
+                    if cls == self.detect_classes.stop_sign and conf > 0.8:
+                        self.stop_sign_detected = True
+                        if conf > self.confidence:
+                            self.confidence = conf
+                            self.box = box
 
     def zoom_image(self, real_frame):
         position = Position(x=250, y=150, width=450, height=300, zoom_factor=3)
-        # position = Position(x=400, y=225, width=250, height=150, zoom_factor=5)
 
         roi = real_frame[
               position.y : position.y+position.height,
@@ -105,7 +124,7 @@ class DetectStopSign:
         should_process = self.frame_count % 5 == 0
 
         if should_process:
-            self.detect_stop_sign(roi)
+            self.detect_objects(roi)
 
         zoomed_roi = cv2.resize(
             roi,
@@ -115,19 +134,30 @@ class DetectStopSign:
             interpolation=cv2.INTER_LINEAR
         )
 
-        if self.stop_sign_detected and self.box is not None:
-            x1, y1, x2, y2 = self.box
-            x1 = int(x1 * position.zoom_factor)
-            y1 = int(y1 * position.zoom_factor)
-            x2 = int(x2 * position.zoom_factor)
-            y2 = int(y2 * position.zoom_factor)
+        if hasattr(self, 'detected_objects') and self.detected_objects:
+            for obj in self.detected_objects:
+                class_name = obj['class_name']
+                confidence = obj['confidence']
+                x1, y1, x2, y2 = obj['box']
 
-            cv2.rectangle(zoomed_roi, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                x1 = int(x1 * position.zoom_factor)
+                y1 = int(y1 * position.zoom_factor)
+                x2 = int(x2 * position.zoom_factor)
+                y2 = int(y2 * position.zoom_factor)
 
-            label = f"PARE: {self.confidence:.2f}"
-            cv2.putText(zoomed_roi, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                colors = {
+                    self.detect_classes.stop_sign: (0, 0, 255),  # Vermelho para PARE
+                    self.detect_classes.big_cone: (0, 165, 255),  # Laranja para cones grandes
+                    self.detect_classes.small_cone: (0, 255, 255),  # Amarelo para cones pequenos
+                    self.detect_classes.go_sign: (0, 255, 0)  # Verde para siga
+                }
 
-            print(f"Placa de PARE detectada! Confiança: {self.confidence:.2f}")
+                color = colors.get(obj['class'], (255, 0, 0))
+
+                cv2.rectangle(zoomed_roi, (x1, y1), (x2, y2), color, 2)
+
+                label = f"{class_name}: {confidence:.2f}"
+                cv2.putText(zoomed_roi, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         cv2.imshow('Zoom', zoomed_roi)
 
