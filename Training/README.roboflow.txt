@@ -1,8 +1,8 @@
 
-camera_detection_pr280 - v1 2025-02-28 8:08pm
+camera_detection_pr280 - v2 2025-02-28 10:30pm
 ==============================
 
-This dataset was exported via roboflow.com on February 28, 2025 at 11:38 PM GMT
+This dataset was exported via roboflow.com on March 1, 2025 at 1:31 AM GMT
 
 Roboflow is an end-to-end computer vision platform that helps you
 * collaborate with your team on computer vision projects

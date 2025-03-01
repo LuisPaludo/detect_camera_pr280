@@ -1,7 +1,6 @@
-path: /home/paludo/projects/detect_camera_pr280/Training
-train: train/images
-val: valid/images
-test: test/images
+train: ../train/images
+val: ../valid/images
+test: ../test/images
 
 nc: 4
 names: ['big_cone', 'go_sign', 'small_cone', 'stop_sign']
@@ -9,6 +8,6 @@ names: ['big_cone', 'go_sign', 'small_cone', 'stop_sign']
 roboflow:
   workspace: paludo
   project: camera_detection_pr280
-  version: 1
+  version: 2
   license: CC BY 4.0
-  url: https://universe.roboflow.com/paludo/camera_detection_pr280/dataset/1
+  url: https://universe.roboflow.com/paludo/camera_detection_pr280/dataset/2
