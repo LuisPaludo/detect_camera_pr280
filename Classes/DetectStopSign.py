@@ -12,8 +12,7 @@ from Classes.Position import Position
 class DetectStopSign:
     def __init__(self):
         # 'yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt'
-
-        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/detect/train6/weights/best.pt')
+        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/detect/train7/weights/best.pt')
         self.model.export(format='onnx')
         self.url = "https://camera1.pr280.com.br/index.m3u8"
         self.cap = cv2.VideoCapture(self.url)
@@ -25,23 +24,25 @@ class DetectStopSign:
         self.confidence = 0
         self.box = None
         self.detect_classes = DetectClasses()
-        self.detected_objects = []
+        self.pato_branco_detections = []
+        self.clevelandia_detections = []
         logging.getLogger("ultralytics").setLevel(logging.WARNING)
 
     def execute(self):
         while True:
             reading_success, frame = self.cap.read()
             if not reading_success:
-                print("Tentando reconectar ao stream...")
+                print("Trying to reconnect stream...")
                 self.cap.release()
-                time.sleep(2)  # Esperar antes de tentar novamente
+                time.sleep(2)
                 self.cap = cv2.VideoCapture(self.url)
                 continue
 
             real_frame = cv2.resize(frame, (1080, 720))
             self.frame_count += 1
 
-            self.zoom_image(real_frame)
+            self.roi_pato_branco_direction(real_frame)
+            self.roi_clevelandia_direction(real_frame)
 
             current_time = time.time()
             if current_time - self.last_datetime_read >= 5.0:
@@ -51,14 +52,6 @@ class DetectStopSign:
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 self.stop()
                 break
-
-    def reconnect_if_needed(self):
-        """Verifica se o stream está funcionando e tenta reconectar se necessário"""
-        if not self.cap.isOpened():
-            return False
-
-        reading_success, frame = self.cap.read()
-        return reading_success
 
     def stop(self):
         self.cap.release()
@@ -75,7 +68,6 @@ class DetectStopSign:
         datetime_text = pytesseract.image_to_string(thresh, config='--psm 7')
         datetime_text = datetime_text.strip()
         if datetime_text:
-            print(f"Data/Hora extraída: {datetime_text}")
             self.detect_time_diff(datetime_text)
 
     @staticmethod
@@ -88,15 +80,15 @@ class DetectStopSign:
                 minutes = int(time_diff // 60)
                 seconds = int(time_diff % 60)
                 if minutes > 0:
-                    print(f"Atraso: {minutes} minutos e {seconds} segundos")
+                    print(f"Data/Hora: {datetime_text} -> Atraso: {minutes} minutos e {seconds} segundos")
                 else:
-                    print(f"Atraso: {seconds} segundos")
+                    print(f"Data/Hora: {datetime_text} -> Atraso: {seconds} segundos")
 
         except ValueError as e:
-            print(f"Erro ao processar a data/hora: {e}")
+            print(f"Error on processing date/hour: {e}")
 
     def detect_objects(self, region_of_interest):
-        self.detected_objects = []
+        detected_objects = []
         self.stop_sign_detected = False
         self.confidence = 0
         self.box = None
@@ -112,26 +104,39 @@ class DetectStopSign:
                 class_name = self.model.names[cls]
                 box = b.xyxy[0].cpu().numpy()
 
-                self.detected_objects.append({
+                detected_objects.append({
                     'class': cls,
                     'class_name': class_name,
                     'confidence': conf,
                     'box': box
                 })
+        return detected_objects
 
-    def zoom_image(self, real_frame):
-        position = Position(x=250, y=150, width=450, height=300, zoom_factor=3)
+    def roi_pato_branco_direction(self, real_frame):
+        position = Position(x=275, y=220, width=125, height=50, zoom_factor=3)
+        zoomed_roi, detected_objects = self.zoom_roi_and_detect_objects(real_frame, position)
+        if detected_objects:
+            self.pato_branco_detections = detected_objects
+        self.print_objects(position, zoomed_roi, self.pato_branco_detections)
+        cv2.imshow('PatoBranco', zoomed_roi)
 
+    def roi_clevelandia_direction(self, real_frame):
+        position = Position(x=360, y=220, width=125, height=70, zoom_factor=3)
+        zoomed_roi, detected_objects = self.zoom_roi_and_detect_objects(real_frame, position)
+        if detected_objects:
+            self.clevelandia_detections = detected_objects
+        self.print_objects(position, zoomed_roi, self.clevelandia_detections)
+        cv2.imshow('Clevelandia', zoomed_roi)
+
+    def zoom_roi_and_detect_objects(self, real_frame, position):
         roi = real_frame[
               position.y : position.y+position.height,
               position.x : position.x+position.width
               ]
-
+        detected_objects = []
         should_process = self.frame_count % 5 == 0
-
         if should_process:
-            self.detect_objects(roi)
-
+            detected_objects = self.detect_objects(roi)
         zoomed_roi = cv2.resize(
             roi,
             None,
@@ -139,9 +144,11 @@ class DetectStopSign:
             fy=position.zoom_factor,
             interpolation=cv2.INTER_LINEAR
         )
+        return zoomed_roi, detected_objects
 
-        if hasattr(self, 'detected_objects') and self.detected_objects:
-            for obj in self.detected_objects:
+    def print_objects(self, position, roi, detected_objects):
+        if detected_objects:
+            for obj in detected_objects:
                 class_name = obj['class_name']
                 confidence = obj['confidence']
                 x1, y1, x2, y2 = obj['box']
@@ -160,10 +167,8 @@ class DetectStopSign:
 
                 color = colors.get(obj['class'], (255, 0, 0))
 
-                cv2.rectangle(zoomed_roi, (x1, y1), (x2, y2), color, 2)
+                cv2.rectangle(roi, (x1, y1), (x2, y2), color, 2)
 
                 label = f"{class_name}: {confidence:.2f}"
-                cv2.putText(zoomed_roi, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-
-        cv2.imshow('Zoom', zoomed_roi)
+                cv2.putText(roi, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
