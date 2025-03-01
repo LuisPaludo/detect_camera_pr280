@@ -1,6 +1,7 @@
-train: ../train/images
-val: ../valid/images
-test: ../test/images
+path: /home/paludo/projects/detect_camera_pr280/Training
+train: train/images
+val: valid/images
+test: test/images
 
 nc: 4
 names: ['big_cone', 'go_sign', 'small_cone', 'stop_sign']

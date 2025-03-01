@@ -13,10 +13,12 @@ class DetectStopSign:
     def __init__(self):
         # 'yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt'
 
-        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/detect/train4/weights/best.pt')
+        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/detect/train6/weights/best.pt')
         self.model.export(format='onnx')
         self.url = "https://camera1.pr280.com.br/index.m3u8"
         self.cap = cv2.VideoCapture(self.url)
+        self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 50000)  # 50 segundos
+        self.cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 50000)  # 50 segundos
         self.frame_count = 0
         self.last_datetime_read = 0
         self.stop_sign_detected = False
@@ -30,8 +32,11 @@ class DetectStopSign:
         while True:
             reading_success, frame = self.cap.read()
             if not reading_success:
-                print("Erro ao capturar frame.")
-                break
+                print("Tentando reconectar ao stream...")
+                self.cap.release()
+                time.sleep(2)  # Esperar antes de tentar novamente
+                self.cap = cv2.VideoCapture(self.url)
+                continue
 
             real_frame = cv2.resize(frame, (1080, 720))
             self.frame_count += 1
@@ -43,9 +48,17 @@ class DetectStopSign:
                 self.get_datetime(real_frame)
                 self.last_datetime_read = current_time
 
-            if cv2.waitKey(10) & 0xFF == ord('q'):
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 self.stop()
                 break
+
+    def reconnect_if_needed(self):
+        """Verifica se o stream está funcionando e tenta reconectar se necessário"""
+        if not self.cap.isOpened():
+            return False
+
+        reading_success, frame = self.cap.read()
+        return reading_success
 
     def stop(self):
         self.cap.release()
@@ -96,22 +109,15 @@ class DetectStopSign:
                 cls = int(b.cls[0])
                 conf = float(b.conf[0])
 
-                if conf > 0.75:
-                    class_name = self.model.names[cls]
-                    box = b.xyxy[0].cpu().numpy()
+                class_name = self.model.names[cls]
+                box = b.xyxy[0].cpu().numpy()
 
-                    self.detected_objects.append({
-                        'class': cls,
-                        'class_name': class_name,
-                        'confidence': conf,
-                        'box': box
-                    })
-
-                    if cls == self.detect_classes.stop_sign and conf > 0.8:
-                        self.stop_sign_detected = True
-                        if conf > self.confidence:
-                            self.confidence = conf
-                            self.box = box
+                self.detected_objects.append({
+                    'class': cls,
+                    'class_name': class_name,
+                    'confidence': conf,
+                    'box': box
+                })
 
     def zoom_image(self, real_frame):
         position = Position(x=250, y=150, width=450, height=300, zoom_factor=3)
