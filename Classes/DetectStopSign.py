@@ -4,15 +4,17 @@ from datetime import datetime
 from ultralytics import YOLO
 import cv2
 import logging
+import numpy as np
 
 from Classes.DetectClasses import DetectClasses
 from Classes.Position import Position
+from Classes.SafeBox import SafeBox
 
 
 class DetectStopSign:
     def __init__(self):
         # 'yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt'
-        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/detect/train7/weights/best.pt')
+        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/detect/train9/weights/best.pt')
         self.model.export(format='onnx')
         self.url = "https://camera1.pr280.com.br/index.m3u8"
         self.cap = cv2.VideoCapture(self.url)
@@ -26,6 +28,10 @@ class DetectStopSign:
         self.detect_classes = DetectClasses()
         self.pato_branco_detections = []
         self.clevelandia_detections = []
+        self.clevelandia_safe_box = SafeBox(x1 = 90, y1 = 180, x2 = 275, y2 = 35)
+        self.pato_branco_safe_triangle = SafeBox(x1 = 100, y1 = 140, x2 = 270, y2 = 140, x3 = 270, y3 = 60)
+        self.zoom_factor = 3
+
         logging.getLogger("ultralytics").setLevel(logging.WARNING)
 
     def execute(self):
@@ -45,9 +51,11 @@ class DetectStopSign:
             self.roi_clevelandia_direction(real_frame)
 
             current_time = time.time()
-            if current_time - self.last_datetime_read >= 5.0:
+            if current_time - self.last_datetime_read >= 1.0:
                 self.get_datetime(real_frame)
                 self.last_datetime_read = current_time
+                self.verify_if_safe_box_contains_object(self.clevelandia_detections, self.clevelandia_safe_box, 'Clevelândia')
+                self.verify_if_safe_box_contains_object(self.pato_branco_detections, self.pato_branco_safe_triangle, 'Pato Branco')
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 self.stop()
@@ -113,19 +121,36 @@ class DetectStopSign:
         return detected_objects
 
     def roi_pato_branco_direction(self, real_frame):
-        position = Position(x=275, y=220, width=125, height=50, zoom_factor=3)
+        position = Position(x=275, y=220, width=125, height=50, zoom_factor=self.zoom_factor)
         zoomed_roi, detected_objects = self.zoom_roi_and_detect_objects(real_frame, position)
         if detected_objects:
             self.pato_branco_detections = detected_objects
-        self.print_objects(position, zoomed_roi, self.pato_branco_detections)
+        color = (0, 255, 0)
+        self.print_objects(zoomed_roi, self.pato_branco_detections)
+
+        p1 = (self.pato_branco_safe_triangle.x1, self.pato_branco_safe_triangle.y1)
+        p2 = (self.pato_branco_safe_triangle.x2, self.pato_branco_safe_triangle.y2)
+        p3 = (self.pato_branco_safe_triangle.x3, self.pato_branco_safe_triangle.y3)
+        points = np.array([p1, p2, p3], np.int32)
+        points = points.reshape((-1, 1, 2))
+        cv2.polylines(zoomed_roi, [points], isClosed=True, color=color, thickness=2)
+
         cv2.imshow('PatoBranco', zoomed_roi)
 
     def roi_clevelandia_direction(self, real_frame):
-        position = Position(x=360, y=220, width=125, height=70, zoom_factor=3)
+        position = Position(x=360, y=220, width=125, height=70, zoom_factor=self.zoom_factor)
         zoomed_roi, detected_objects = self.zoom_roi_and_detect_objects(real_frame, position)
         if detected_objects:
             self.clevelandia_detections = detected_objects
-        self.print_objects(position, zoomed_roi, self.clevelandia_detections)
+        color = (0, 255, 0)
+        self.print_objects(zoomed_roi, self.clevelandia_detections)
+        cv2.rectangle(
+            zoomed_roi,
+            (self.clevelandia_safe_box.x1, self.clevelandia_safe_box.y1),
+            (self.clevelandia_safe_box.x2, self.clevelandia_safe_box.y2),
+            color,
+            3
+        )
         cv2.imshow('Clevelandia', zoomed_roi)
 
     def zoom_roi_and_detect_objects(self, real_frame, position):
@@ -146,17 +171,17 @@ class DetectStopSign:
         )
         return zoomed_roi, detected_objects
 
-    def print_objects(self, position, roi, detected_objects):
+    def print_objects(self, roi, detected_objects):
         if detected_objects:
             for obj in detected_objects:
                 class_name = obj['class_name']
                 confidence = obj['confidence']
                 x1, y1, x2, y2 = obj['box']
 
-                x1 = int(x1 * position.zoom_factor)
-                y1 = int(y1 * position.zoom_factor)
-                x2 = int(x2 * position.zoom_factor)
-                y2 = int(y2 * position.zoom_factor)
+                x1 = int(x1 * self.zoom_factor)
+                y1 = int(y1 * self.zoom_factor)
+                x2 = int(x2 * self.zoom_factor)
+                y2 = int(y2 * self.zoom_factor)
 
                 colors = {
                     self.detect_classes.stop_sign: (0, 0, 255),  # Vermelho para PARE
@@ -172,3 +197,24 @@ class DetectStopSign:
                 label = f"{class_name}: {confidence:.2f}"
                 cv2.putText(roi, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
+    def verify_if_safe_box_contains_object(self, detected_objects, safe_box: SafeBox, via):
+        obj_contained_list = []
+        for obj in detected_objects:
+            x1, y1, x2, y2 = obj['box']
+            x1 = int(x1 * self.zoom_factor)
+            y1 = int(y1 * self.zoom_factor)
+            x2 = int(x2 * self.zoom_factor)
+            y2 = int(y2 * self.zoom_factor)
+            contains = safe_box.contains(x2, y2, x1, y1)
+
+            match contains:
+                case SafeBox.PARTIAL:
+                    obj_contained_list.append(obj)
+
+                case SafeBox.CONTAINS:
+                    obj_contained_list.append(obj)
+
+        if obj_contained_list:
+            print(f'Sentido {via} bloqueado')
+        else:
+            print(f'Sentido {via} liberada')
