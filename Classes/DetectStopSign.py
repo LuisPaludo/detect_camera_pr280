@@ -12,10 +12,15 @@ from Classes.SafeBox import SafeBox
 
 
 class DetectStopSign:
+    PATO_BRANCO = 'pato_branco'
+    CLEVELANDIA = 'clevelandia'
+    CLOSED = 'closed'
+
     def __init__(self):
         # 'yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt'
-        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/detect/train9/weights/best.pt')
-        self.model.export(format='onnx')
+        # self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/detect/train9/weights/best.pt')
+        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/classify/train3/weights/best.pt')
+        # self.model.export(format='onnx')
         self.url = "https://camera1.pr280.com.br/index.m3u8"
         self.cap = cv2.VideoCapture(self.url)
         self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 50000)  # 50 segundos
@@ -31,6 +36,8 @@ class DetectStopSign:
         self.clevelandia_safe_box = SafeBox(x1 = 90, y1 = 180, x2 = 275, y2 = 35)
         self.pato_branco_safe_triangle = SafeBox(x1 = 100, y1 = 140, x2 = 270, y2 = 140, x3 = 270, y3 = 60)
         self.zoom_factor = 3
+        self.confidence = None
+        self.selected_class = None
 
         logging.getLogger("ultralytics").setLevel(logging.WARNING)
 
@@ -47,15 +54,37 @@ class DetectStopSign:
             real_frame = cv2.resize(frame, (1080, 720))
             self.frame_count += 1
 
-            self.roi_pato_branco_direction(real_frame)
-            self.roi_clevelandia_direction(real_frame)
+            # self.roi_pato_branco_direction(real_frame)
+            # self.roi_clevelandia_direction(real_frame)
+            selected_class, confidence = self.region_of_intereset(real_frame)
+
+            if selected_class and confidence:
+                self.selected_class = selected_class
+                self.confidence = confidence
+                match self.selected_class:
+                    case DetectStopSign.PATO_BRANCO:
+                        print(f'O caminho para Pato Branco está liberado. Confiança do resultado: {self.confidence}')
+                    case DetectStopSign.CLEVELANDIA:
+                        print(f'O caminho para Clevelândia está liberado. Confiança do resultado: {self.confidence}')
+                    case DetectStopSign.CLOSED:
+                        print(f'Ambos os caminhos estão bloqueados, existe a possibilidade da barreira de clevelândia estar aberta. Confiança do resultado: {confidence}')
+
 
             current_time = time.time()
-            if current_time - self.last_datetime_read >= 1.0:
+            if current_time - self.last_datetime_read >= 10.0:
                 self.get_datetime(real_frame)
                 self.last_datetime_read = current_time
-                self.verify_if_safe_box_contains_object(self.clevelandia_detections, self.clevelandia_safe_box, 'Clevelândia')
-                self.verify_if_safe_box_contains_object(self.pato_branco_detections, self.pato_branco_safe_triangle, 'Pato Branco')
+                if self.selected_class and self.confidence:
+                    match self.selected_class:
+                        case DetectStopSign.PATO_BRANCO:
+                            print(f'O caminho para Pato Branco está liberado. Confiança do resultado: {self.confidence}')
+                        case DetectStopSign.CLEVELANDIA:
+                            print(f'O caminho para Clevelândia está liberado. Confiança do resultado: {self.confidence}')
+                        case DetectStopSign.CLOSED:
+                            print(f'Ambos os caminhos estão bloqueados, existe a possibilidade da barreira de clevelândia estar aberta. Confiança do resultado: {confidence}')
+
+                # self.verify_if_safe_box_contains_object(self.clevelandia_detections, self.clevelandia_safe_box, 'Clevelândia')
+                # self.verify_if_safe_box_contains_object(self.pato_branco_detections, self.pato_branco_safe_triangle, 'Pato Branco')
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 self.stop()
@@ -84,13 +113,19 @@ class DetectStopSign:
             extracted_datetime = datetime.strptime(datetime_text, "%d-%m-%Y %H:%M:%S")
             current_datetime = datetime.now()
             time_diff = (current_datetime - extracted_datetime).total_seconds()
+
+            camera_misconfigured = extracted_datetime.year == 2000
+
             if time_diff > 0:
                 minutes = int(time_diff // 60)
                 seconds = int(time_diff % 60)
-                if minutes > 0:
-                    print(f"Data/Hora: {datetime_text} -> Atraso: {minutes} minutos e {seconds} segundos")
+                if camera_misconfigured:
+                        print(f"Atraso: {seconds} segundos (câmera com data desconfigurada)")
                 else:
-                    print(f"Data/Hora: {datetime_text} -> Atraso: {seconds} segundos")
+                    if minutes > 0:
+                        print(f"Data/Hora: {datetime_text} -> Atraso: {minutes} minutos e {seconds} segundos")
+                    else:
+                        print(f"Data/Hora: {datetime_text} -> Atraso: {seconds} segundos")
 
         except ValueError as e:
             print(f"Error on processing date/hour: {e}")
@@ -101,7 +136,7 @@ class DetectStopSign:
         self.confidence = 0
         self.box = None
 
-        results = self.model(region_of_interest)
+        results = self.model.predict(region_of_interest)
 
         for r in results:
             boxes = r.boxes
@@ -119,6 +154,9 @@ class DetectStopSign:
                     'box': box
                 })
         return detected_objects
+
+    def classify_frame(self, region_of_interest):
+        return self.model.predict(region_of_interest)
 
     def roi_pato_branco_direction(self, real_frame):
         position = Position(x=275, y=220, width=125, height=50, zoom_factor=self.zoom_factor)
@@ -153,6 +191,20 @@ class DetectStopSign:
         )
         cv2.imshow('Clevelandia', zoomed_roi)
 
+    def region_of_intereset(self, real_frame):
+        position = Position(x=200, y=150, width=460, height=200, zoom_factor=1)
+        zoomed_roi, results = self.zoom_roi_and_classify_frame(real_frame, position)
+
+        selected_class = None
+        confidence = None
+        if results:
+            for result in results :
+                predicted = result.probs.top1
+                selected_class = result.names[predicted]
+                confidence = result.probs.top1conf
+        cv2.imshow('ROI', zoomed_roi)
+        return selected_class, confidence
+
     def zoom_roi_and_detect_objects(self, real_frame, position):
         roi = real_frame[
               position.y : position.y+position.height,
@@ -170,6 +222,24 @@ class DetectStopSign:
             interpolation=cv2.INTER_LINEAR
         )
         return zoomed_roi, detected_objects
+
+    def zoom_roi_and_classify_frame(self, real_frame, position):
+        results = None
+        roi = real_frame[
+              position.y : position.y+position.height,
+              position.x : position.x+position.width
+              ]
+        should_process = self.frame_count % 5 == 0
+        if should_process:
+            results = self.classify_frame(roi)
+        zoomed_roi = cv2.resize(
+            roi,
+            None,
+            fx=position.zoom_factor,
+            fy=position.zoom_factor,
+            interpolation=cv2.INTER_LINEAR
+        )
+        return zoomed_roi, results
 
     def print_objects(self, roi, detected_objects):
         if detected_objects:
