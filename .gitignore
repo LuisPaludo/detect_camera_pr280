@@ -7,3 +7,4 @@ yolov3-tiny.weights
 .yolov3.*
 *.xml
 yolov8*
+.env
