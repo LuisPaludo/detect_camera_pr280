@@ -7,7 +7,7 @@ class TrainedClassifyModel:
     CLOSED = 'closed'
 
     def __init__(self):
-        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/classify/train3/weights/best.pt')
+        self.model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/classify/train5/weights/best.pt')
         self.confidence = None
         self.selected_class = None
 

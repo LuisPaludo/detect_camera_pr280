@@ -5,6 +5,7 @@ from datetime import datetime
 class DatetimeManagement:
     def __init__(self):
         self.last_datetime_read = 0
+        self.camera_misconfigured = False
 
     @staticmethod
     def get_date_time_text(frame):

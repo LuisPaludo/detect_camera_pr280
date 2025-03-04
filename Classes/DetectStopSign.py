@@ -4,7 +4,6 @@ import logging
 
 from Classes.DatetimeManagement import DatetimeManagement
 from Classes.Position import Position
-from Classes.SafeBox import SafeBox
 from Classes.TrainedClassifyModel import TrainedClassifyModel
 from decouple import config
 
@@ -46,7 +45,7 @@ class DetectStopSign:
                         print(f'Ambos os caminhos estão bloqueados, existe a possibilidade da barreira de clevelândia estar aberta. Confiança do resultado: {confidence}')
 
             current_time = time.time()
-            if current_time - self.date_time_management.last_datetime_read >= 10.0:
+            if current_time - self.date_time_management.last_datetime_read >= 1:
                 date_time_frame = self.get_datetime_frame(real_frame)
                 date_time_text = self.date_time_management.get_date_time_text(date_time_frame)
                 self.date_time_management.get_time_diff(date_time_text)

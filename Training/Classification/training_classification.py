@@ -4,4 +4,4 @@ from ultralytics import YOLO
 model = YOLO('yolov8s-cls.pt')  # modelo base de classificação
 
 # Treinar o modelo com seu dataset do Roboflow
-results = model.train(data='data', epochs=100)
+results = model.train(data='data', epochs=200)
