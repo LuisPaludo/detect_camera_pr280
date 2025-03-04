@@ -13,9 +13,12 @@ class DatetimeManagement:
         return datetime_text.strip()
 
     @staticmethod
-    def get_time_diff(datetime_text):
+    def datetime_text_to_datetime(datetime_text):
+        return datetime.strptime(datetime_text, "%d-%m-%Y %H:%M:%S")
+
+    def get_time_diff(self, datetime_text):
         try:
-            extracted_datetime = datetime.strptime(datetime_text, "%d-%m-%Y %H:%M:%S")
+            extracted_datetime = self.datetime_text_to_datetime(datetime_text)
             current_datetime = datetime.now()
             time_diff = (current_datetime - extracted_datetime).total_seconds()
 

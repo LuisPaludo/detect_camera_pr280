@@ -1,4 +1,3 @@
-/.idea/
 /.venv/
 yolov3.cfg
 yolov3.weights
@@ -8,3 +7,8 @@ yolov3-tiny.weights
 *.xml
 yolov8*
 .env
+*.ini
+/Classes/road_images/
+/.idea/
+/Training/Classification/data/
+/Training/ObjectClassification/data/
