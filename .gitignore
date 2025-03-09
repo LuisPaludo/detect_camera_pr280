@@ -4,6 +4,7 @@ yolov3.weights
 yolov3-tiny.cfg
 yolov3-tiny.weights
 .yolov3.*
+yolo*
 *.xml
 yolov8*
 .env
@@ -12,3 +13,4 @@ yolov8*
 /.idea/
 /Training/Classification/data/
 /Training/ObjectClassification/data/
+/runs

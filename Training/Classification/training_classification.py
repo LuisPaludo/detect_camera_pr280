@@ -1,7 +1,14 @@
 from ultralytics import YOLO
 
-# Inicializar o modelo de classificação
-model = YOLO('yolov8s-cls.pt')  # modelo base de classificação
+model = YOLO()
+# model = YOLO('/home/paludo/projects/detect_camera_pr280/runs/classify/train8/weights/best.pt')
 
-# Treinar o modelo com seu dataset do Roboflow
-results = model.train(data='data', epochs=100)
+results = model.train(
+    data='data',
+    epochs=300,
+    translate=0.0,
+    scale=0.0,
+    mosaic=0.0,
+    fliplr=0.0,
+    patience=0
+)

@@ -17,7 +17,7 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "road_images")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
-class DetectStopSign:
+class CameraDetection:
 
     def __init__(self):
         self.model = TrainedClassifyModel()
@@ -45,7 +45,7 @@ class DetectStopSign:
             real_frame = cv2.resize(gray_frame, (1080, 720))
             self.frame_count += 1
 
-            selected_class, confidence = self.region_of_intereset(real_frame)
+            selected_class, confidence, zoomed_roi = self.region_of_intereset(real_frame)
 
             if selected_class and confidence:
                 self.model.add_classification(selected_class, confidence)
@@ -56,7 +56,7 @@ class DetectStopSign:
                 self.date_time_management.last_datetime_read = current_time
 
                 most_frequent_class, avg_confidence = self.get_measurement()
-                img_url_path = self.generate_img(real_frame, most_frequent_class)
+                img_url_path = self.generate_img(zoomed_roi, most_frequent_class)
 
                 if most_frequent_class and avg_confidence:
                     self.db_road_state.add(most_frequent_class, avg_confidence, img_url_path)
@@ -126,7 +126,7 @@ class DetectStopSign:
 
     def region_of_intereset(self, real_frame):
         zoomed_roi = self.get_zoomed_frame(real_frame)
-        results = self.classify_frame(real_frame)
+        results = self.classify_frame(zoomed_roi)
 
         selected_class = None
         confidence = None
@@ -136,7 +136,7 @@ class DetectStopSign:
                 selected_class = result.names[predicted]
                 confidence = result.probs.top1conf
         cv2.imshow('ROI', zoomed_roi)
-        return selected_class, confidence
+        return selected_class, confidence, zoomed_roi
 
     def classify_frame(self, zoomed_roi):
         results = None
