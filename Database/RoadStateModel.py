@@ -33,7 +33,7 @@ class RoadStateModel(Base):
         )
 
     def to_dict(self):
-        return {
+        result = {
             'id': self.id,
             'road_state': self.road_state,
             'confidence': float(self.confidence) if self.confidence else None,
@@ -43,8 +43,24 @@ class RoadStateModel(Base):
             'moving_avg_state': self.moving_avg_state,
             'moving_avg_percentage': float(self.moving_avg_percentage) if self.moving_avg_percentage else None,
             'state_duration': self.state_duration.total_seconds() if self.state_duration else None,
-            'formatted_duration': self.format_duration() if self.state_duration else "00:00:00"
+            'formatted_duration': self.format_duration() if self.state_duration else "00:00:00",
         }
+        try:
+            session = db_manager.session
+            if self.id and self.moving_avg_state:
+                previous_state = session.query(RoadStateModel) \
+                    .filter(RoadStateModel.id < self.id) \
+                    .filter(RoadStateModel.moving_avg_state != self.moving_avg_state) \
+                    .order_by(RoadStateModel.id.desc()) \
+                    .first()
+
+                if previous_state:
+                    result['last_road_state'] = previous_state.moving_avg_state
+                    result['last_road_state_duration'] = previous_state.state_duration.total_seconds() if previous_state.state_duration else None
+                    result['formatted_last_duration'] = previous_state.format_duration() if previous_state.state_duration else "00:00:00"
+        except Exception as e:
+            print(f"Error retrieving previous state in to_dict: {e}")
+        return result
 
     @staticmethod
     def add(road_state, confidence, img_url):
