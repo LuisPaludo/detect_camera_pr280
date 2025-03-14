@@ -36,13 +36,13 @@ class RoadStateModel(Base):
         return {
             'id': self.id,
             'road_state': self.road_state,
-            'confidence': self.confidence,
-            'created_at': self.created_at,
+            'confidence': float(self.confidence) if self.confidence else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
             'img_url': self.img_url,
-            'updated_at': self.updated_at,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'moving_avg_state': self.moving_avg_state,
-            'moving_avg_percentage': self.moving_avg_percentage,
-            'state_duration': self.state_duration,
+            'moving_avg_percentage': float(self.moving_avg_percentage) if self.moving_avg_percentage else None,
+            'state_duration': self.state_duration.total_seconds() if self.state_duration else None,
             'formatted_duration': self.format_duration() if self.state_duration else "00:00:00"
         }
 
@@ -75,7 +75,7 @@ class RoadStateModel(Base):
             return None
 
     @staticmethod
-    def calculate_moving_average(n=5):
+    def calculate_moving_average(n=10):
         try:
             session = db_manager.session
             records = session.query(RoadStateModel) \
@@ -190,3 +190,14 @@ class RoadStateModel(Base):
         minutes, seconds = divmod(remainder, 60)
 
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    @staticmethod
+    def get_latest():
+        session = db_manager.session
+        try:
+            last_record = session.query(RoadStateModel).order_by(RoadStateModel.id.desc()).first()
+            if last_record:
+                return last_record.to_dict()
+            return None
+        finally:
+            session.close()

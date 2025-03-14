@@ -25,10 +25,10 @@ class CameraDetection:
 
         self.url = config('URL')
         self.cap = cv2.VideoCapture(self.url)
-        self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 50000)  # 50 segundos
-        self.cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 50000)  # 50 segundos
+        self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 50000)
+        self.cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 50000)
         self.frame_count = 0
-        self.measurement_interval = 30
+        self.measurement_interval = 15
 
         self.db_road_state = RoadStateModel()
 
@@ -45,7 +45,7 @@ class CameraDetection:
             real_frame = cv2.resize(gray_frame, (1080, 720))
             self.frame_count += 1
 
-            selected_class, confidence, zoomed_roi = self.region_of_intereset(real_frame)
+            selected_class, confidence, zoomed_roi = self.region_of_interest(real_frame)
 
             if selected_class and confidence:
                 self.model.add_classification(selected_class, confidence)
@@ -124,7 +124,7 @@ class CameraDetection:
             interpolation=cv2.INTER_LINEAR
         )
 
-    def region_of_intereset(self, real_frame):
+    def region_of_interest(self, real_frame):
         zoomed_roi = self.get_zoomed_frame(real_frame)
         results = self.classify_frame(zoomed_roi)
 
@@ -140,7 +140,7 @@ class CameraDetection:
 
     def classify_frame(self, zoomed_roi):
         results = None
-        should_process = self.frame_count % 5 == 0
+        should_process = self.frame_count % 2 == 0
         if should_process:
             results = self.model.classify_frame(zoomed_roi)
         return results
